@@ -18,8 +18,8 @@ export const TRANSLATIONS = {
         emailPlaceholder: "Correo electrónico",
         commentPlaceholder: "Tu opinión...",
         sendFeedback: "Enviar",
-        inputPlaceholder: "Escribe tu mensaje...",
-        systemRole: "Eres un asistente útil y preciso. Responde en Español.",
+        inputPlaceholder: "Escribe tu mensaje o sube una imagen de factura...",
+        systemRole: "Eres un asistente útil y preciso. Si te envían la foto de una factura o comprobante, extrae y organiza todos los datos en una tabla Markdown muy limpia y detallada.",
         errorKey: "Configura tu API Key primero.",
         errorModel: "Sin modelos disponibles.",
         successFeedback: "¡Enviado!",
@@ -28,7 +28,8 @@ export const TRANSLATIONS = {
         tutStep2: "Abre el menú de Ajustes",
         tutStep3: "Pega la clave y detecta",
         tutBtn: "¡Entendido!",
-        fabTooltip: "Danos tu opinión"
+        fabTooltip: "Danos tu opinión",
+        uploadInvoiceBtn: "🧾 Analizar Factura"
     },
     en: {
         welcomeTitle: "Nos Planét Chat",
@@ -49,8 +50,8 @@ export const TRANSLATIONS = {
         emailPlaceholder: "Email address",
         commentPlaceholder: "Your thoughts...",
         sendFeedback: "Send",
-        inputPlaceholder: "Type your message...",
-        systemRole: "You are a helpful assistant. Answer in English.",
+        inputPlaceholder: "Type a message or upload an invoice image...",
+        systemRole: "You are a helpful and precise assistant. If sent an invoice image, extract and format all data in a clean Markdown table.",
         errorKey: "Please set your API Key first.",
         errorModel: "No models available.",
         successFeedback: "Sent!",
@@ -59,6 +60,7 @@ export const TRANSLATIONS = {
         tutStep2: "Open Settings menu",
         tutStep3: "Paste key & detect",
         tutBtn: "Got it!",
-        fabTooltip: "Give feedback"
+        fabTooltip: "Give feedback",
+        uploadInvoiceBtn: "🧾 Analyze Invoice"
     }
 };

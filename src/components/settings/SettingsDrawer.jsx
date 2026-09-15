@@ -27,7 +27,7 @@ const SettingsDrawer = ({
                         value={apiKey}
                         onChange={onApiKeyChange}
                         className="p-2"
-                        placeholder="AIzaSy..."
+                        placeholder="AIzaSy... o AQ.Ab..."
                     />
                     <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-xs mt-1 underline opacity-70 hover:opacity-100 block text-right">Get API Key</a>
                 </div>

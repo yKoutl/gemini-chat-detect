@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, Key, Settings } from 'lucide-react';
+import BotIcon from './assets/bot nos planet v2.png';
 
 // Components
 import Button from './components/shared/Button';
@@ -30,7 +31,7 @@ function GeminiChat() {
   const [darkMode, setDarkMode] = useState(true);
   const [language, setLanguage] = useState('es');
   const t = TRANSLATIONS[language];
-  const [accentColor, setAccentColor] = useState('#7F5AF0');
+  const [accentColor, setAccentColor] = useState('#10B981');
 
   // Feedback & Likes
   const [showFeedback, setShowFeedback] = useState(false);
@@ -42,10 +43,15 @@ function GeminiChat() {
   // Chat & API
   const [messages, setMessages] = useState([INITIAL_MSG]);
   const [input, setInput] = useState('');
+  const [selectedImage, setSelectedImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [apiKey, setApiKey] = useState('');
-  const [availableModels, setAvailableModels] = useState([{ id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' }]);
-  const [selectedModel, setSelectedModel] = useState('gemini-1.5-flash');
+  const [availableModels, setAvailableModels] = useState([
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Recomendado)' },
+    { id: 'gemini-1.5-flash-latest', name: 'Gemini 1.5 Flash (Latest)' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+  ]);
+  const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash');
   const [showSettings, setShowSettings] = useState(false);
   const [testMessage, setTestMessage] = useState('');
 
@@ -112,31 +118,55 @@ function GeminiChat() {
   };
 
   const fetchAvailableModels = async () => {
-    if (!apiKey) { setTestMessage(t.errorKey); return; }
-    setTestMessage('...');
+    const cleanKey = apiKey.trim();
+    if (!cleanKey) { setTestMessage(t.errorKey); return; }
+    setTestMessage('Detectando...');
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`);
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message);
+      if (!response.ok) {
+        if (data.error?.reason === 'SERVICE_DISABLED' || data.error?.message?.includes('disabled')) {
+          throw new Error('⚠️ API deshabilitada en Google Cloud Console');
+        }
+        if (data.error?.reason === 'API_KEY_SERVICE_BLOCKED' || data.error?.message?.includes('blocked')) {
+          throw new Error('⚠️ Método ListModels bloqueado en tu API Key');
+        }
+        throw new Error(data.error?.message || 'Error de conexión');
+      }
 
       const validModels = data.models?.filter(m => m.supportedGenerationMethods.includes('generateContent'))
         .map(m => ({ id: m.name.replace('models/', ''), name: m.displayName }));
 
       if (validModels?.length) {
         setAvailableModels(validModels);
-        setSelectedModel(validModels[0].id);
-        setTestMessage(`✓ ${validModels.length}`);
+        const preferred = validModels.find(m => m.id === 'gemini-3.6-flash') ||
+                          validModels.find(m => m.id === 'gemini-2.0-flash') ||
+                          validModels.find(m => m.id === 'gemini-1.5-flash-latest') ||
+                          validModels[0];
+        if (preferred) setSelectedModel(preferred.id);
+        setTestMessage(`✓ ${validModels.length} modelos detectados`);
       } else { throw new Error(t.errorModel); }
-    } catch (error) { setTestMessage('Error'); }
+    } catch (error) { setTestMessage(error.message || 'Error'); }
   };
 
   const handleSend = async () => {
-    if (!input.trim()) return;
-    if (!apiKey) { setShowSettings(true); return; }
+    if (!input.trim() && !selectedImage) return;
+    const cleanKey = apiKey.trim();
+    if (!cleanKey) { setShowSettings(true); return; }
 
-    const userMessage = { role: 'user', text: input };
+    const defaultInvoicePrompt = "Analiza detenidamente esta imagen de factura o comprobante de pago. Extrae y organiza toda la información relevante en una tabla estructurada en Markdown: RUC/DNI, Emisor/Razón Social, N° de Comprobante, Fecha de Emisión, Detalle de Productos/Servicios (Descripción, Cantidad, Precio Unitario, Subtotal), IGV y Total General.";
+    const userPromptText = input.trim() || (selectedImage ? defaultInvoicePrompt : '');
+
+    const userMessage = { 
+      role: 'user', 
+      text: userPromptText,
+      image: selectedImage ? selectedImage.preview : null 
+    };
+
+    const imageToProcess = selectedImage;
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    setSelectedImage(null);
     setIsLoading(true);
 
     try {
@@ -145,19 +175,63 @@ function GeminiChat() {
         parts: [{ text: msg.text }]
       }));
 
+      const currentParts = [];
+      if (imageToProcess) {
+        currentParts.push({
+          inlineData: {
+            mimeType: imageToProcess.mimeType,
+            data: imageToProcess.base64
+          }
+        });
+      }
+      currentParts.push({ text: userPromptText });
+
       const payload = {
-        contents: [...history, { role: 'user', parts: [{ text: userMessage.text }] }],
+        contents: [...history, { role: 'user', parts: currentParts }],
         systemInstruction: { parts: [{ text: t.systemRole }] }
       };
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
+      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${cleanKey}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': cleanKey
+        },
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message);
+      let data = await response.json();
+
+      // Reintento automático si el modelo seleccionado no existe, está descontinuado o saturado
+      if (!response.ok && (
+        data.error?.message?.includes('not found') ||
+        data.error?.message?.includes('not supported') ||
+        data.error?.message?.includes('high demand') ||
+        data.error?.message?.includes('no longer available') ||
+        response.status === 503 ||
+        response.status === 429
+      )) {
+        const fallbackModel = selectedModel === 'gemini-2.0-flash' ? 'gemini-1.5-flash-latest' : 'gemini-2.0-flash';
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:generateContent?key=${cleanKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': cleanKey
+          },
+          body: JSON.stringify(payload)
+        });
+        data = await response.json();
+      }
+
+      if (!response.ok) {
+        if (data.error?.reason === 'SERVICE_DISABLED' || data.error?.message?.includes('disabled')) {
+          throw new Error('La API de Gemini está deshabilitada en tu proyecto de Google Cloud. Habilítala desde Google Cloud Console.');
+        }
+        if (data.error?.message?.includes('high demand')) {
+          throw new Error('El modelo está experimentando alta demanda. Intenta de nuevo en unos segundos.');
+        }
+        throw new Error(data.error?.message || 'Error en la petición');
+      }
 
       const botText = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (botText) setMessages(prev => [...prev, { role: 'model', text: botText }]);
@@ -193,8 +267,8 @@ function GeminiChat() {
       {showWelcome && (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
           <div className="modal-container items-center justify-center text-center p-8 max-w-md w-full animate-in fade-in zoom-in duration-300 rounded-2xl">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 mx-auto" style={{ background: 'var(--stroke)', color: 'var(--highlight)' }}>
-              <Bot size={40} />
+            <div className="w-24 h-24 rounded-full flex items-center justify-center mb-6 mx-auto overflow-hidden border-2 border-[var(--stroke)]">
+              <img src={BotIcon} alt="Bot" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-3xl font-bold mb-3">{t.welcomeTitle}</h1>
             <p className="mb-8 opacity-80">{t.welcomeText}</p>
@@ -290,6 +364,10 @@ function GeminiChat() {
           onSend={handleSend}
           isLoading={isLoading}
           placeholder={t.inputPlaceholder}
+          selectedImage={selectedImage}
+          onImageSelect={setSelectedImage}
+          onImageRemove={() => setSelectedImage(null)}
+          t={t}
         />
 
         <FeedbackSidebar
